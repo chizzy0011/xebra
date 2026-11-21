@@ -13,7 +13,8 @@ import {
   waitForClaim,
 } from "../../lib/evm-claim";
 import { reportError } from "../../lib/format-error";
-import { type ClassifiedError, classifyWalletError } from "../../lib/wallet-error";
+import type { ClassifiedError } from "../../lib/wallet-error";
+import { classifyClaimError } from "./claim-error";
 
 /**
  * The EVM half of `/claim`: complete an attested transfer from your own wallet, on whichever EVM
@@ -90,6 +91,7 @@ export function EvmClaim({
     setError(null);
     setSent(null);
     setConfirming(false);
+    let handedToWallet = false;
     try {
       // First, always. Circle's transmitter has the same address on every chain, so every question
       // below would be answered, wrongly, by whichever chain the wallet happened to be on.
@@ -113,6 +115,7 @@ export function EvmClaim({
       }
 
       setBusy("Confirm in your wallet…");
+      handedToWallet = true;
       const sentHash = await sendClaim(provider, target, wallet, message, attestation);
       setSent(sentHash);
 
@@ -131,7 +134,7 @@ export function EvmClaim({
       }
     } catch (err) {
       reportError("claim failed", err);
-      setError(classifyWalletError(err));
+      setError(classifyClaimError(err, handedToWallet));
     } finally {
       setBusy(null);
       void syncEvmChain();

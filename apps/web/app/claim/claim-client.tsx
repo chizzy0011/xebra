@@ -9,7 +9,8 @@ import { browserConnection, buildMintTransaction, prepareClaim } from "../../lib
 import type { EvmClaimTarget } from "../../lib/evm-claim";
 import { reportError } from "../../lib/format-error";
 import { waitForSignature } from "../../lib/solana-confirm";
-import { type ClassifiedError, classifyWalletError } from "../../lib/wallet-error";
+import type { ClassifiedError } from "../../lib/wallet-error";
+import { classifyClaimError } from "./claim-error";
 import { EvmClaim } from "./evm-claim";
 
 /**
@@ -247,7 +248,7 @@ export function ClaimClient() {
       setWallet(publicKey.toBase58());
     } catch (err) {
       reportError("wallet connect failed", err);
-      setError(classifyWalletError(err));
+      setError(classifyClaimError(err, false));
     }
   }, [provider]);
 
@@ -328,6 +329,7 @@ export function ClaimClient() {
     if (!provider || !wallet || attestation?.status !== "complete") return;
     setBusy("Building the transaction…");
     setError(null);
+    let handedToWallet = false;
     try {
       const connection = browserConnection();
       const input = {
@@ -353,6 +355,7 @@ export function ClaimClient() {
       /** Signs, submits and waits, so the next step only starts on a landed transaction. */
       const submit = async (transaction: Transaction, step: string) => {
         setBusy(`${step}: confirm in your wallet…`);
+        handedToWallet = true;
         const signed = await provider.signTransaction(transaction);
         setBusy(`${step}: submitting…`);
         const sig = await connection.sendRawTransaction(signed.serialize());
@@ -362,12 +365,13 @@ export function ClaimClient() {
       };
 
       if (prepared.setup) await submit(prepared.setup, "Opening the USDC account (1 of 2)");
+      handedToWallet = false;
       setBusy("Building the mint…");
       const mint = await buildMintTransaction(connection, input);
       setSignature(await submit(mint, prepared.setup ? "Minting (2 of 2)" : "Minting"));
     } catch (err) {
       reportError("claim failed", err);
-      setError(classifyWalletError(err));
+      setError(classifyClaimError(err, handedToWallet));
     } finally {
       setBusy(null);
     }
