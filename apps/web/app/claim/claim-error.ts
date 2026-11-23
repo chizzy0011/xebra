@@ -1,4 +1,5 @@
 import { formatError } from "../../lib/format-error";
+import { SolanaConfirmTimeoutError, SolanaTransactionError } from "../../lib/solana-confirm";
 import { type ClassifiedError, classifyWalletError } from "../../lib/wallet-error";
 
 /**
@@ -11,8 +12,20 @@ import { type ClassifiedError, classifyWalletError } from "../../lib/wallet-erro
  *
  * Once a transaction is handed to the wallet (`sendClaim` / `submit`), `handedToWallet = true`
  * delegates to `classifyWalletError` so ambiguous transport/timeout failures warn `maybeSent: true`.
+ *
+ * Two errors the app throws itself after broadcasting are answered before the classifier sees
+ * them, because its patterns read them wrongly: a `SolanaTransactionError` ("Solana rejected
+ * transaction …") is an on-chain failure, not a decline, and a `SolanaConfirmTimeoutError` is
+ * longer than the classifier's length limit, but the mint may still land, so it keeps the
+ * signature in its message and `maybeSent: true`.
  */
 export function classifyClaimError(err: unknown, handedToWallet: boolean): ClassifiedError {
+  if (err instanceof SolanaTransactionError) {
+    return { kind: "onchain", message: err.message, maybeSent: false, raw: err.raw };
+  }
+  if (err instanceof SolanaConfirmTimeoutError) {
+    return { kind: "timeout", message: err.message, maybeSent: true, raw: err.message };
+  }
   if (handedToWallet) {
     return classifyWalletError(err);
   }

@@ -16,19 +16,7 @@ import { reportError } from "../../lib/format-error";
 import type { ClassifiedError } from "../../lib/wallet-error";
 import { classifyClaimError } from "./claim-error";
 
-/**
- * The EVM half of `/claim`: complete an attested transfer from your own wallet, on whichever EVM
- * chain it was sent to.
- *
- * Deliberately parallel to the Solana flow on the same page rather than folded into it. The two
- * share a promise — the attestation is public, anyone may submit the mint — but nothing else: no
- * token account to create, no owner to be told, no rent. An EVM claim is connect, switch network,
- * sign once.
- *
- * One thing it has that the Solana flow does not: a Fast transfer's attestation runs out after
- * about a day. That is found by asking the chain whether the mint would succeed, and fixed by
- * asking Circle to sign again. The money was never at risk; the signature was only stale.
- */
+/** Renders a classified claim error: a calm notice for a decline, an alarm otherwise. */
 function ClaimErrorNotice({ error }: { error: ClassifiedError }) {
   if (error.kind === "declined" || error.kind === "popup") {
     return (
@@ -56,6 +44,19 @@ function ClaimErrorNotice({ error }: { error: ClassifiedError }) {
   );
 }
 
+/**
+ * The EVM half of `/claim`: complete an attested transfer from your own wallet, on whichever EVM
+ * chain it was sent to.
+ *
+ * Deliberately parallel to the Solana flow on the same page rather than folded into it. The two
+ * share a promise — the attestation is public, anyone may submit the mint — but nothing else: no
+ * token account to create, no owner to be told, no rent. An EVM claim is connect, switch network,
+ * sign once.
+ *
+ * One thing it has that the Solana flow does not: a Fast transfer's attestation runs out after
+ * about a day. That is found by asking the chain whether the mint would succeed, and fixed by
+ * asking Circle to sign again. The money was never at risk; the signature was only stale.
+ */
 export function EvmClaim({
   message,
   attestation,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { SolanaConfirmTimeoutError, SolanaTransactionError } from "../../lib/solana-confirm";
 import { classifyClaimError } from "./claim-error";
 
 describe("classifyClaimError", () => {
@@ -51,5 +52,34 @@ describe("classifyClaimError", () => {
     const reverted = classifyClaimError(new Error("execution reverted"), true);
     expect(reverted.kind).toBe("onchain");
     expect(reverted.maybeSent).toBe(false);
+  });
+
+  it("reports a Solana mint that failed on chain as a failure, not a cancellation", () => {
+    const sig = "5xFailedOnChainSig";
+    const failed = new SolanaTransactionError(sig, { InstructionError: [0, { Custom: 1 }] });
+    // The message says "Solana rejected transaction", which the wallet classifier reads as a decline.
+    expect(failed.message).toMatch(/\brejected\b/);
+
+    for (const handedToWallet of [true, false]) {
+      const classified = classifyClaimError(failed, handedToWallet);
+      expect(classified.kind).toBe("onchain");
+      expect(classified.maybeSent).toBe(false);
+      expect(classified.message).toBe(failed.message);
+      expect(classified.message).toContain(sig);
+    }
+  });
+
+  it("keeps the signature and maybeSent=true when a Solana mint is not confirmed in time", () => {
+    // A real base58 signature is about 88 characters.
+    const sig = "4vJ9JU1bJJE96FWSJKvHsmmFADCg4gpZQff4P3bkLKi".repeat(2);
+    const timeout = new SolanaConfirmTimeoutError(sig, 90_000);
+    // Longer than the wallet classifier's length limit, which would turn it into "unexpected".
+    expect(timeout.message.length).toBeGreaterThan(150);
+
+    const classified = classifyClaimError(timeout, true);
+    expect(classified.kind).toBe("timeout");
+    expect(classified.maybeSent).toBe(true);
+    expect(classified.message).toContain(sig);
+    expect(classified.message).toMatch(/may still land/);
   });
 });
